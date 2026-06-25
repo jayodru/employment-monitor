@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US Employment Landscape Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419;
+    --panel:#161d26;
+    --panel-2:#1d2630;
+    --line:#2a3642;
+    --ink:#e8edf2;
+    --ink-dim:#8a99a8;
+    --ink-faint:#5b6b7a;
+    --stress:#e0913a;     /* amber — labor-market stress */
+    --stress-soft:#e0913a22;
+    --ease:#3ec9a7;       /* teal — easing / improving */
+    --ease-soft:#3ec9a722;
+    --accent:#6ea8fe;
+    --grid:#222d38;
+    --mono:"SFMono-Regular",ui-monospace,"Menlo","Consolas",monospace;
+    --sans:"Inter",-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent)}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 80px}
+
+  /* ---- masthead ---- */
+  header.mast{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    flex-wrap:wrap;gap:16px;
+    border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:4px;
+  }
+  .mast h1{
+    font-size:21px;font-weight:650;letter-spacing:-0.02em;margin:0;
+  }
+  .mast .sub{color:var(--ink-dim);font-size:12.5px;margin-top:3px;
+    text-transform:uppercase;letter-spacing:.14em;font-weight:500}
+  .stamp{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);text-align:right}
+  .stamp .ok{color:var(--ease)}
+  .stamp .bad{color:var(--stress)}
+
+  /* ---- pressure strip (signature) ---- */
+  .pressure{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:1px;background:var(--line);border:1px solid var(--line);
+    border-radius:10px;overflow:hidden;margin:22px 0 26px;
+  }
+  .cell{background:var(--panel);padding:16px 18px;position:relative}
+  .cell .k{font-size:11px;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--ink-dim);font-weight:600}
+  .cell .v{font-family:var(--mono);font-size:26px;margin-top:8px;letter-spacing:-0.02em}
+  .cell .d{font-family:var(--mono);font-size:12px;margin-top:4px}
+  .up{color:var(--stress)} .down{color:var(--ease)} .flat{color:var(--ink-faint)}
+  .cell .spark{position:absolute;right:14px;bottom:12px;width:74px;height:26px;opacity:.85}
+
+  /* ---- section ---- */
+  section{margin:34px 0}
+  .sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+  .sec-head h2{font-size:15px;font-weight:650;margin:0;letter-spacing:-0.01em}
+  .sec-head .tag{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);
+    border:1px solid var(--line);padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.08em}
+  .sec-head .src{margin-left:auto;font-size:11px;color:var(--ink-faint)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:1.4fr 1fr;gap:18px}
+  @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .card h3{font-size:12.5px;font-weight:600;margin:0 0 2px;color:var(--ink)}
+  .card .note{font-size:11.5px;color:var(--ink-dim);margin:0 0 12px}
+  .chart-box{position:relative;height:260px}
+  .chart-box.tall{height:320px}
+
+  /* controls */
+  .controls{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .controls button{
+    background:var(--panel-2);color:var(--ink-dim);border:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;padding:5px 11px;border-radius:6px;cursor:pointer;
+    transition:.15s}
+  .controls button:hover{color:var(--ink);border-color:var(--ink-faint)}
+  .controls button.on{background:var(--accent);color:#0b1118;border-color:var(--accent);font-weight:600}
+
+  /* narrative */
+  .narr{background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);border-left:3px solid var(--stress);
+    border-radius:10px;padding:18px 20px}
+  .narr ul{margin:0;padding-left:18px}
+  .narr li{margin:7px 0;font-size:13.5px;color:var(--ink)}
+  .narr li::marker{color:var(--stress)}
+
+  /* state bars */
+  .bars{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+  .bar-row{display:grid;grid-template-columns:36px 1fr 64px;align-items:center;gap:10px;font-size:12px}
+  .bar-row .st{font-family:var(--mono);color:var(--ink-dim)}
+  .bar-track{height:18px;background:var(--panel-2);border-radius:4px;overflow:hidden}
+  .bar-fill{height:100%;background:linear-gradient(90deg,var(--stress-soft),var(--stress));border-radius:4px}
+  .bar-row .val{font-family:var(--mono);text-align:right;color:var(--ink)}
+
+  /* size/industry table */
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-dim);font-weight:600}
+  td.num,th.num{text-align:right;font-family:var(--mono)}
+  tr:hover td{background:var(--panel-2)}
+
+  footer{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);
+    font-size:11px;color:var(--ink-faint);line-height:1.7}
+  .legend{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+  .dot{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .err{background:var(--stress-soft);border:1px solid var(--stress);color:var(--stress);
+    padding:8px 12px;border-radius:7px;font-size:12px;font-family:var(--mono);margin-bottom:16px;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <div>
+      <h1>US Employment Landscape Monitor</h1>
+      <div class="sub">Layoffs · Claims · Sector trends</div>
+    </div>
+    <div class="stamp" id="stamp">loading…</div>
+  </header>
+
+  <div class="err" id="err"></div>
+
+  <!-- SIGNATURE: pressure strip -->
+  <div class="pressure" id="pressure"></div>
+
+  <!-- DRIVING FACTORS -->
+  <section>
+    <div class="sec-head">
+      <h2>What's moving the labor market</h2>
+      <span class="tag">read first</span>
+      <span class="src">derived weekly from the series below</span>
+    </div>
+    <div class="narr"><ul id="narrative"></ul></div>
+  </section>
+
+  <!-- CLAIMS -->
+  <section>
+    <div class="sec-head">
+      <h2>Jobless claims</h2><span class="tag">weekly · FRED</span>
+      <span class="src">leading signal — first to move</span>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Initial claims</h3>
+        <p class="note">New unemployment filings each week. Rising = fresh job loss.</p>
+        <div class="controls" id="ic-range"></div>
+        <div class="chart-box"><canvas id="icChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Continued claims</h3>
+        <p class="note">People still collecting benefits. Rising = harder to get re-hired.</p>
+        <div class="chart-box"><canvas id="ccChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WARN -->
+  <section>
+    <div class="sec-head">
+      <h2>WARN layoff notices</h2><span class="tag">monthly · state panel</span>
+      <span class="src">workers affected by mass-layoff filings</span>
+    </div>
+    <div class="grid3">
+      <div class="card">
+        <h3>National WARN trend</h3>
+        <p class="note">Total workers affected by WARN notices, all tracked states.</p>
+        <div class="chart-box"><canvas id="warnTrend"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>By state · latest month</h3>
+        <p class="note">Where the layoffs are concentrated right now.</p>
+        <div class="bars" id="stateBars"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INDUSTRY x SIZE -->
+  <section>
+    <div class="sec-head">
+      <h2>By industry &amp; employer size</h2><span class="tag">notices</span>
+      <span class="src">recent WARN filings, bucketed</span>
+    </div>
+    <div class="card">
+      <table id="sizeTable">
+        <thead><tr>
+          <th>Industry</th>
+          <th class="num">50–199</th><th class="num">200–499</th><th class="num">500+</th>
+          <th class="num">Workers affected</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTORS -->
+  <section>
+    <div class="sec-head">
+      <h2>Sector employment trends</h2><span class="tag">monthly · BLS</span>
+      <span class="src">3-month payroll change by sector</span>
+    </div>
+    <div class="card">
+      <p class="note">Bars right (teal) = sector adding jobs. Bars left (amber) = sector shedding jobs. Figures in thousands.</p>
+      <div class="chart-box tall"><canvas id="sectorChart"></canvas></div>
+    </div>
+  </section>
+
+  <footer>
+    <div style="margin-bottom:10px">
+      <span class="legend"><span class="dot" style="background:var(--stress)"></span>stress / job loss rising</span>
+      <span class="legend"><span class="dot" style="background:var(--ease)"></span>easing / improving</span>
+    </div>
+    Sources: U.S. Bureau of Labor Statistics (unemployment, sector payrolls) ·
+    U.S. Employment &amp; Training Administration via FRED (weekly claims) ·
+    Cleveland Fed WARN panel (state layoff notices). All figures US, public-domain government data.
+    Dashboard auto-refreshes when the weekly data job runs. This is an informational tool, not investment or employment advice.
+  </footer>
+</div>
+
+<script>
+const FMT = n => n>=1000 ? (n/1000).toFixed(n>=100000?0:1)+'k' : (''+Math.round(n));
+const FMTfull = n => n.toLocaleString('en-US');
+const C = getComputedStyle(document.documentElement);
+const col = k => C.getPropertyValue(k).trim();
+
+Chart.defaults.color = col('--ink-dim');
+Chart.defaults.font.family = "ui-monospace, Menlo, Consolas, monospace";
+Chart.defaults.font.size = 10.5;
+Chart.defaults.borderColor = col('--grid');
+
+let DATA = null;
+
+function arrow(curr, prev){
+  if(prev==null) return {cls:'flat',txt:''};
+  const d = curr-prev;
+  if(Math.abs(d) < 1e-9) return {cls:'flat',txt:'– flat'};
+  const pct = prev? (d/prev*100):0;
+  return {cls: d>0?'up':'down', txt:(d>0?'▲ ':'▼ ')+Math.abs(pct).toFixed(1)+'%'};
+}
+
+function spark(values, color){
+  const w=74,h=26,n=values.length;
+  if(n<2) return '';
+  const mn=Math.min(...values),mx=Math.max(...values),rng=(mx-mn)||1;
+  const pts=values.map((v,i)=>`${(i/(n-1)*w).toFixed(1)},${(h-(v-mn)/rng*(h-3)-1.5).toFixed(1)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`;
+}
+
+function buildPressure(){
+  const p = document.getElementById('pressure');
+  const cells = [];
+  const ic = DATA.fred['Initial claims']||[];
+  if(ic.length){
+    const last=ic[ic.length-1].value, prev=ic[ic.length-2]?.value;
+    const a=arrow(last,prev);
+    cells.push(`<div class="cell"><div class="k">Initial claims</div>
+      <div class="v">${FMTfull(last)}</div>
+      <div class="d ${a.cls}">${a.txt} wk/wk</div>
+      ${spark(ic.slice(-16).map(x=>x.value), col(a.cls==='up'?'--stress':'--ease'))}</div>`);
+  }
+  const ur = DATA.bls['Unemployment rate']||[];
+  if(ur.length){
+    const last=ur[ur.length-1].value, prev=ur[ur.length-2]?.value;
+    const a=arrow(last,prev);
+    cells.push(`<div class="cell"><div class="k">Unemployment rate</div>
+      <div class="v">${last.toFixed(1)}%</div>
+      <div class="d ${a.cls}">${a.txt} mo/mo</div>
+      ${spark(ur.slice(-16).map(x=>x.value), col(a.cls==='up'?'--stress':'--ease'))}</div>`);
+  }
+  // WARN national latest month
+  const wr = (DATA.warn.rows)||[];
+  if(wr.length){
+    const byMonth={};
+    wr.forEach(r=>{const m=r.month;byMonth[m]=(byMonth[m]||0)+ (+r.workers||0);});
+    const ms=Object.keys(byMonth).sort();
+    const last=byMonth[ms[ms.length-1]], prev=byMonth[ms[ms.length-2]];
+    const a=arrow(last,prev);
+    const series=ms.slice(-16).map(m=>byMonth[m]);
+    cells.push(`<div class="cell"><div class="k">WARN workers · latest mo</div>
+      <div class="v">${FMTfull(last)}</div>
+      <div class="d ${a.cls}">${a.txt} mo/mo</div>
+      ${spark(series, col(a.cls==='up'?'--stress':'--ease'))}</div>`);
+  }
+  const cc = DATA.fred['Continued claims']||[];
+  if(cc.length){
+    const last=cc[cc.length-1].value, prev=cc[cc.length-2]?.value;
+    const a=arrow(last,prev);
+    cells.push(`<div class="cell"><div class="k">Continued claims</div>
+      <div class="v">${FMT(last)}</div>
+      <div class="d ${a.cls}">${a.txt} wk/wk</div>
+      ${spark(cc.slice(-16).map(x=>x.value), col(a.cls==='up'?'--stress':'--ease'))}</div>`);
+  }
+  p.innerHTML = cells.join('');
+}
+
+function lineChart(id, series, color, rangeWeeks){
+  const data = rangeWeeks? series.slice(-rangeWeeks) : series;
+  const ctx=document.getElementById(id);
+  return new Chart(ctx,{type:'line',data:{
+    labels:data.map(d=>d.date),
+    datasets:[{data:data.map(d=>d.value),borderColor:color,
+      backgroundColor:color+'18',borderWidth:1.8,fill:true,
+      pointRadius:0,pointHoverRadius:4,tension:.25}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        label:c=>FMTfull(c.parsed.y)}}},
+      scales:{x:{grid:{display:false},ticks:{maxTicksLimit:6,maxRotation:0}},
+        y:{grid:{color:col('--grid')},ticks:{callback:FMT}}}}});
+}
+
+let icChart;
+function drawIC(weeks){
+  if(icChart) icChart.destroy();
+  icChart = lineChart('icChart', DATA.fred['Initial claims']||[], col('--stress'), weeks);
+  document.querySelectorAll('#ic-range button').forEach(b=>b.classList.toggle('on', +b.dataset.w===weeks));
+}
+
+function buildRanges(){
+  const box=document.getElementById('ic-range');
+  [['13w',13],['26w',26],['1y',52],['2y',104]].forEach(([lab,w])=>{
+    const b=document.createElement('button');b.textContent=lab;b.dataset.w=w;
+    b.onclick=()=>drawIC(w);box.appendChild(b);
+  });
+}
+
+function buildStateBars(){
+  const wr=(DATA.warn.rows)||[];
+  const ms=[...new Set(wr.map(r=>r.month))].sort();
+  const latest=ms[ms.length-1];
+  const rows=wr.filter(r=>r.month===latest)
+    .map(r=>({st:r.state,v:+r.workers||0}))
+    .sort((a,b)=>b.v-a.v).slice(0,10);
+  const mx=Math.max(...rows.map(r=>r.v),1);
+  document.getElementById('stateBars').innerHTML = rows.map(r=>`
+    <div class="bar-row"><span class="st">${r.st}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(r.v/mx*100).toFixed(0)}%"></div></div>
+      <span class="val">${FMTfull(r.v)}</span></div>`).join('');
+}
+
+function buildWarnTrend(){
+  const wr=(DATA.warn.rows)||[];
+  const byMonth={};
+  wr.forEach(r=>{byMonth[r.month]=(byMonth[r.month]||0)+(+r.workers||0);});
+  const ms=Object.keys(byMonth).sort();
+  new Chart(document.getElementById('warnTrend'),{type:'bar',data:{
+    labels:ms,datasets:[{data:ms.map(m=>byMonth[m]),
+      backgroundColor:col('--stress')+'cc',borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>FMTfull(c.parsed.y)+' workers'}}},
+      scales:{x:{grid:{display:false},ticks:{maxTicksLimit:8,maxRotation:0}},
+        y:{grid:{color:col('--grid')},ticks:{callback:FMT}}}}});
+}
+
+function buildSizeTable(){
+  const b=(DATA.warn_breakdown&&DATA.warn_breakdown.by_industry_size)||[];
+  const tb=document.querySelector('#sizeTable tbody');
+  tb.innerHTML=b.sort((x,y)=>y.workers-x.workers).map(r=>`
+    <tr><td>${r.industry}</td>
+      <td class="num">${r.small}</td><td class="num">${r.mid}</td><td class="num">${r.large}</td>
+      <td class="num">${FMTfull(r.workers)}</td></tr>`).join('');
+}
+
+function buildSectors(){
+  const skip=new Set(['Unemployment rate','Total nonfarm']);
+  const rows=[];
+  Object.entries(DATA.bls).forEach(([k,pts])=>{
+    if(skip.has(k)||pts.length<4) return;
+    rows.push({k,chg:pts[pts.length-1].value-pts[pts.length-4].value});
+  });
+  rows.sort((a,b)=>a.chg-b.chg);
+  new Chart(document.getElementById('sectorChart'),{type:'bar',data:{
+    labels:rows.map(r=>r.k),
+    datasets:[{data:rows.map(r=>r.chg),
+      backgroundColor:rows.map(r=>r.chg>=0?col('--ease')+'cc':col('--stress')+'cc'),
+      borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>(c.parsed.x>=0?'+':'')+c.parsed.x.toFixed(1)+'k jobs (3mo)'}}},
+      scales:{x:{grid:{color:col('--grid')},ticks:{callback:v=>(v>0?'+':'')+v}},
+        y:{grid:{display:false}}}}});
+}
+
+function buildNarrative(){
+  document.getElementById('narrative').innerHTML =
+    (DATA.narrative||[]).map(n=>`<li>${n}</li>`).join('');
+}
+
+function buildStamp(){
+  const g=new Date(DATA.generated_at);
+  const s=DATA.sources||{};
+  const badge=(name,o)=>`<span class="${o&&o.ok?'ok':'bad'}">${name} ${o&&o.ok?'✓':'✗'}</span>`;
+  document.getElementById('stamp').innerHTML =
+    `updated ${g.toISOString().slice(0,16).replace('T',' ')} UTC<br>`+
+    [badge('BLS',s.bls),badge('FRED',s.fred),badge('WARN',s.warn)].join(' · ');
+  // surface any source errors
+  const errs=Object.entries(s).filter(([_,o])=>o&&!o.ok);
+  if(errs.length){
+    const e=document.getElementById('err');
+    e.style.display='block';
+    e.textContent='Data gap: '+errs.map(([k,o])=>`${k} (${o.error||'unavailable'})`).join('; ')+'. Showing last available values.';
+  }
+}
+
+async function init(){
+  try{
+    const r=await fetch('data/data.json?_='+Date.now());
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    DATA=await r.json();
+  }catch(e){
+    document.getElementById('err').style.display='block';
+    document.getElementById('err').textContent='Could not load data.json — '+e.message+'. Run fetch_data.py or wait for the weekly job.';
+    document.getElementById('stamp').textContent='no data';
+    return;
+  }
+  buildStamp();
+  buildPressure();
+  buildNarrative();
+  buildRanges();
+  drawIC(52);
+  lineChart('ccChart', DATA.fred['Continued claims']||[], col('--accent'), 52);
+  buildWarnTrend();
+  buildStateBars();
+  buildSizeTable();
+  buildSectors();
+}
+init();
+</script>
+</body>
+</html>
